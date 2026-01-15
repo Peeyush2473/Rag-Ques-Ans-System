@@ -9,8 +9,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
-# 1. Configuration - Using absolute path to avoid directory confusion
-# This points to a 'documents' folder in the root of your project
+
+# 1. Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCUMENT_DIRECTORY = os.path.join(BASE_DIR, 'documents')
 PERSIST_DIRECTORY = os.path.join(BASE_DIR, 'chroma_db')
@@ -25,23 +25,38 @@ text_splitter = RecursiveCharacterTextSplitter(
     length_function=len,
 )
 
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+embeddings = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2"
+)
 
-def load_documents(directory):
+# Connect to existing db or create new if it does not exist
+db = Chroma(
+        persist_directory=PERSIST_DIRECTORY,
+        embedding_function=embeddings, 
+    )
+
+def load_documents(directory, existing_db):
     """
     Loads documents from the specified directory with support for multiple formats.
+    Skips documents that have already been embedded in vector store.
     """
     print(f"Scanning directory: {os.path.abspath(directory)}")
     documents = []
     
-    if not os.path.exists(directory):
-        print(f"Directory not found: {directory}")
-        return documents
+    existing_items = existing_db.get()
+    existing_sources = set()
+    
+    if existing_items and 'metadatas' in existing_items:
+        existing_sources = {m['source'] for m in existing_items['metadatas'] if 'source' in m}
 
     for root, _, files in os.walk(directory):
         for file in files:
-            file_path = os.path.join(root, file)
+            file_path = os.path.abspath(os.path.join(root, file))
             file_lower = file.lower()
+            
+            if file_path in existing_sources:
+                print(f"Skipping (already indexed): {file}")
+                continue
             
             try:
                 # Handle different file types
@@ -54,7 +69,8 @@ def load_documents(directory):
                 elif file_lower.endswith(".pptx"):
                     loader = UnstructuredPowerPointLoader(file_path)
                 else:
-                    # Skip unsupported files
+                    extension = os.path.splitext(file)[1]
+                    print(f"Could not process {file}. '{extension}' files not supported")
                     continue
                 
                 print(f"Successfully loaded: {file}")
@@ -67,22 +83,19 @@ def load_documents(directory):
 # 3. Main Execution Logic
 if __name__ == "__main__":
     # Load
-    raw_documents = load_documents(DOCUMENT_DIRECTORY)
+    raw_documents = load_documents(DOCUMENT_DIRECTORY, db)
     
     if not raw_documents:
-        print("\n❌ Error: No documents found! Check if your files are in the 'documents' folder.")
+        print("\nNo new documents found! Check if your files are in the 'documents' folder.")
         print(f"Expected path: {os.path.abspath(DOCUMENT_DIRECTORY)}")
     else:
         # Split
-        print(f"Splitting {len(raw_documents)} documents...")
+        print(f"Splitting {len(raw_documents)} new documents...")
         split_docs = text_splitter.split_documents(raw_documents)
         
         # Index
         print(f"Indexing {len(split_docs)} chunks into Chroma...")
-        db = Chroma.from_documents(
-            documents=split_docs, 
-            embedding=embeddings, 
-            persist_directory=PERSIST_DIRECTORY
-        )
+        
+        db.add_documents(split_docs)
         
         print(f"✅ Successfully indexed to {PERSIST_DIRECTORY}")
