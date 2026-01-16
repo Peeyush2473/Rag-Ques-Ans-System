@@ -4,3 +4,4 @@ venv/
 .vscode/
 documents/
 chroma_db/
+__pycache__

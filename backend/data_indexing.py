@@ -1,9 +1,11 @@
 import os
 from langchain_community.document_loaders import (
-    PyPDFLoader, 
+    PyPDFLoader,
     TextLoader, 
     UnstructuredWordDocumentLoader, 
-    UnstructuredPowerPointLoader
+    UnstructuredPowerPointLoader,
+    CSVLoader,
+    UnstructuredExcelLoader
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -14,7 +16,7 @@ from langchain_chroma import Chroma
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCUMENT_DIRECTORY = os.path.join(BASE_DIR, 'documents')
 PERSIST_DIRECTORY = os.path.join(BASE_DIR, 'chroma_db')
-
+SENTENCE_TRANSFORMER_MODEL_DIR = os.path.join(BASE_DIR, "backend/models/all-MiniLM-L6-v2")
 # Ensure directories exist
 os.makedirs(DOCUMENT_DIRECTORY, exist_ok=True)
 
@@ -26,7 +28,7 @@ text_splitter = RecursiveCharacterTextSplitter(
 )
 
 embeddings = HuggingFaceEmbeddings(
-    model_name="all-MiniLM-L6-v2"
+    model_name=SENTENCE_TRANSFORMER_MODEL_DIR
 )
 
 # Connect to existing db or create new if it does not exist
@@ -68,6 +70,10 @@ def load_documents(directory, existing_db):
                     loader = TextLoader(file_path, encoding='utf-8')
                 elif file_lower.endswith(".pptx"):
                     loader = UnstructuredPowerPointLoader(file_path)
+                elif file_lower.endswith(".csv"):
+                    loader = CSVLoader(file_path)
+                elif file_lower.endswith("xlsx") or file_lower.endswith('xls'):
+                    loader = UnstructuredExcelLoader(file_path)
                 else:
                     extension = os.path.splitext(file)[1]
                     print(f"Could not process {file}. '{extension}' files not supported")
@@ -80,9 +86,7 @@ def load_documents(directory, existing_db):
                 
     return documents
 
-# 3. Main Execution Logic
-if __name__ == "__main__":
-    # Load
+def process_documents(db):
     raw_documents = load_documents(DOCUMENT_DIRECTORY, db)
     
     if not raw_documents:
@@ -93,9 +97,17 @@ if __name__ == "__main__":
         print(f"Splitting {len(raw_documents)} new documents...")
         split_docs = text_splitter.split_documents(raw_documents)
         
-        # Index
-        print(f"Indexing {len(split_docs)} chunks into Chroma...")
+        # 3. Index with Batching to avoid the 5461 limit
+        batch_size = 5000  # Staying safely under the 5461 limit
+        print(f"Indexing {len(split_docs)} chunks into Chroma in batches...")
         
-        db.add_documents(split_docs)
+        for i in range(0, len(split_docs), batch_size):
+            batch = split_docs[i : i + batch_size]
+            print(f"Processing batch {i // batch_size + 1} ({len(batch)} chunks)...")
+            db.add_documents(batch)
         
-        print(f"✅ Successfully indexed to {PERSIST_DIRECTORY}")
+        print(f"✅ Successfully indexed to Vector Store!!")
+# 3. Main Execution Logic
+
+if __name__ == "__main__":
+    process_documents(db)
