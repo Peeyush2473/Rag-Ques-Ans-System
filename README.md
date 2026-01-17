@@ -2,10 +2,13 @@
 
 A powerful, local Retrieval-Augmented Generation (RAG) system that allows you to chat with your documents using local LLMs. Built with **Streamlit**, **LangChain**, **ChromaDB**, and **Ollama**.
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://rag-ques-ans-system.streamlit.app/)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.53.0-FF4B4B)
 ![LangChain](https://img.shields.io/badge/LangChain-Integration-green)
 ![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-black)
+
+### 🔗 [Click here to try the Live Demo](https://rag-ques-ans-system.streamlit.app/)
 
 ## 🚀 Features
 
