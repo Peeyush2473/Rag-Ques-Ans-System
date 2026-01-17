@@ -2,13 +2,20 @@ import streamlit as st
 import os
 import sys
 from datetime import datetime
-
+import requests
 # Add the backend directory to the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import your existing backend modules
 from data_indexing import db, process_documents, DOCUMENT_DIRECTORY, PERSIST_DIRECTORY
 from retrieval_pipeline import ask_question, vectorstore
+
+def is_ollama_running():
+    try:
+        r = requests.get("http://localhost:11434/api/tags", timeout=2)
+        return r.status_code == 200
+    except Exception:
+        return False
 
 # Page configuration
 st.set_page_config(
@@ -302,7 +309,10 @@ with header_col1:
 with header_col2:
     try:
         _ = vectorstore._collection.count()
-        st.success("🟢 System Online")
+        if is_ollama_running():
+            st.success("🟢 System Online")
+        else:
+            st.error("🔴 Ollama is not running.\nOpen Ollama app or use 'ollama serve' in terminal.")
     except Exception as e:
         st.error("🔴 System Offline")
 
